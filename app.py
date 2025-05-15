@@ -5,6 +5,8 @@ import plotly.express as px
 import openpyxl
 from io import BytesIO
 import requests
+from fpdf import FPDF
+from datetime import datetime
 
 st.set_page_config(page_title="Análise de Serviços Técnicos", layout="wide")
 
@@ -21,6 +23,189 @@ def format_currency(value):
     if pd.isna(value):
         return None
     return f"${value:,.2f}"
+
+
+def create_pdf(data):
+    """Cria um PDF com os dados da página principal"""
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+
+    # Adiciona título
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(200, 10, txt="BNS - PORTAL DE ANÁLISES DE DADOS FINANCEIROS", ln=1, align='C')
+    pdf.ln(10)
+
+    # Adiciona data de geração
+    pdf.set_font("Arial", size=10)
+    pdf.cell(200, 10, txt=f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", ln=1, align='R')
+    pdf.ln(10)
+
+    # Seção 1: Métricas Gerais
+    pdf.set_font("Arial", 'B', 14)
+    pdf.cell(200, 10, txt="1. Métricas Gerais", ln=1)
+    pdf.set_font("Arial", size=10)
+
+    completed_services = data[data['Realizado']]
+    not_completed = data[(data['Realizado'] == False) & (data['Cliente'].notna())]
+
+    metrics = [
+        ("Atendimentos Realizados", len(completed_services)),
+        ("Atendimentos Não Realizados", len(not_completed)),
+        ("Total em Serviços", format_currency(completed_services['Serviço'].sum())),
+        ("Total em Gorjetas", format_currency(completed_services['Gorjeta'].sum())),
+        ("Lucro da Empresa", format_currency(completed_services['Lucro Empresa'].sum()))
+    ]
+
+    for metric, value in metrics:
+        pdf.cell(100, 10, txt=f"{metric}:", ln=0)
+        pdf.cell(100, 10, txt=str(value), ln=1)
+
+    pdf.ln(10)
+
+    # Seção 2: Resumo por Técnico
+    pdf.set_font("Arial", 'B', 14)
+    pdf.cell(200, 10, txt="2. Resumo por Técnico", ln=1)
+
+    # Prepara dados para a tabela
+    tech_summary = completed_services.groupby(['Nome', 'Categoria']).agg({
+        'Serviço': 'sum',
+        'Gorjeta': 'sum',
+        'Pagamento Tecnico': 'sum',
+        'Lucro Empresa': 'sum',
+        'Cliente': 'count'
+    }).reset_index()
+
+    tech_summary.columns = ['Técnico', 'Categoria', 'Total Serviços', 'Total Gorjetas',
+                            'Total Pagamento', 'Lucro Empresa', 'Atendimentos']
+
+    # Adiciona tabela de técnicos
+    pdf.set_font("Arial", size=10)
+    col_widths = [40, 30, 30, 30, 30, 30]
+
+    # Cabeçalho da tabela
+    headers = ["Técnico", "Categoria", "Serviços", "Gorjetas", "Pagamento", "Lucro"]
+    for i, header in enumerate(headers):
+        pdf.cell(col_widths[i], 10, txt=header, border=1, align='C')
+    pdf.ln()
+
+    # Linhas da tabela
+    for _, row in tech_summary.iterrows():
+        pdf.cell(col_widths[0], 10, txt=str(row['Técnico']), border=1)
+        pdf.cell(col_widths[1], 10, txt=str(row['Categoria']), border=1)
+        pdf.cell(col_widths[2], 10, txt=format_currency(row['Total Serviços']), border=1, align='R')
+        pdf.cell(col_widths[3], 10, txt=format_currency(row['Total Gorjetas']), border=1, align='R')
+        pdf.cell(col_widths[4], 10, txt=format_currency(row['Total Pagamento']), border=1, align='R')
+        pdf.cell(col_widths[5], 10, txt=format_currency(row['Lucro Empresa']), border=1, align='R')
+        pdf.ln()
+
+    pdf.ln(10)
+
+    # Seção 3: Métodos de Pagamento
+    pdf.set_font("Arial", 'B', 14)
+    pdf.cell(200, 10, txt="3. Métodos de Pagamento", ln=1)
+    pdf.set_font("Arial", size=10)
+
+    valid_payments = completed_services[completed_services['Pagamento'].isin(FORMAS_PAGAMENTO_VALIDAS)]
+
+    if not valid_payments.empty:
+        payment_methods = valid_payments.groupby('Pagamento').agg({
+            'Serviço': ['sum', 'count'],
+            'Gorjeta': 'sum',
+            'Lucro Empresa': 'sum'
+        }).reset_index()
+
+        payment_methods.columns = ['Método', 'Total Serviços', 'Qtd Usos', 'Total Gorjetas', 'Lucro Empresa']
+        payment_methods['Total Geral'] = payment_methods['Total Serviços'] + payment_methods['Total Gorjetas']
+
+        # Tabela de métodos de pagamento
+        pdf.set_font("Arial", 'B', 12)
+        pdf.cell(200, 10, txt="Resumo por Método de Pagamento:", ln=1)
+        pdf.set_font("Arial", size=10)
+
+        # Cabeçalho
+        headers = ["Método", "Usos", "Serviços", "Gorjetas", "Total", "Lucro"]
+        col_widths_payments = [40, 30, 30, 30, 30, 30]
+
+        for i, header in enumerate(headers):
+            pdf.cell(col_widths_payments[i], 10, txt=header, border=1, align='C')
+        pdf.ln()
+
+        # Linhas
+        for _, row in payment_methods.iterrows():
+            pdf.cell(col_widths_payments[0], 10, txt=str(row['Método']), border=1)
+            pdf.cell(col_widths_payments[1], 10, txt=str(row['Qtd Usos']), border=1, align='C')
+            pdf.cell(col_widths_payments[2], 10, txt=format_currency(row['Total Serviços']), border=1, align='R')
+            pdf.cell(col_widths_payments[3], 10, txt=format_currency(row['Total Gorjetas']), border=1, align='R')
+            pdf.cell(col_widths_payments[4], 10, txt=format_currency(row['Total Geral']), border=1, align='R')
+            pdf.cell(col_widths_payments[5], 10, txt=format_currency(row['Lucro Empresa']), border=1, align='R')
+            pdf.ln()
+
+        # Adiciona porcentagem de uso
+        pdf.ln(5)
+        pdf.set_font("Arial", 'B', 12)
+        pdf.cell(200, 10, txt="Distribuição por Método de Pagamento:", ln=1)
+        pdf.set_font("Arial", size=10)
+
+        total_usos = payment_methods['Qtd Usos'].sum()
+        for _, row in payment_methods.iterrows():
+            percent = (row['Qtd Usos'] / total_usos * 100)
+            pdf.cell(100, 10, txt=f"{row['Método']}:", ln=0)
+            pdf.cell(100, 10, txt=f"{percent:.1f}% ({row['Qtd Usos']} usos)", ln=1)
+
+    pdf.ln(10)
+
+    # Seção 4: Atendimentos por Dia da Semana
+    pdf.set_font("Arial", 'B', 14)
+    pdf.cell(200, 10, txt="4. Atendimentos por Dia da Semana", ln=1)
+    pdf.set_font("Arial", size=10)
+
+    day_summary = completed_services.groupby('Dia').agg({
+        'Serviço': ['count', 'sum'],
+        'Gorjeta': 'sum',
+        'Lucro Empresa': 'sum'
+    }).reset_index()
+
+    day_summary.columns = ['Dia', 'Atendimentos', 'Total Serviços', 'Total Gorjetas', 'Lucro Empresa']
+
+    # Ordena os dias corretamente
+    day_order = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado']
+    day_summary['Dia'] = pd.Categorical(day_summary['Dia'], categories=day_order, ordered=True)
+    day_summary = day_summary.sort_values('Dia')
+
+    # Tabela de dias
+    col_widths_days = [40, 30, 40, 40, 40]
+    headers = ["Dia", "Atendimentos", "Serviços", "Gorjetas", "Lucro"]
+
+    for i, header in enumerate(headers):
+        pdf.cell(col_widths_days[i], 10, txt=header, border=1, align='C')
+    pdf.ln()
+
+    for _, row in day_summary.iterrows():
+        pdf.cell(col_widths_days[0], 10, txt=str(row['Dia']), border=1)
+        pdf.cell(col_widths_days[1], 10, txt=str(row['Atendimentos']), border=1, align='C')
+        pdf.cell(col_widths_days[2], 10, txt=format_currency(row['Total Serviços']), border=1, align='R')
+        pdf.cell(col_widths_days[3], 10, txt=format_currency(row['Total Gorjetas']), border=1, align='R')
+        pdf.cell(col_widths_days[4], 10, txt=format_currency(row['Lucro Empresa']), border=1, align='R')
+        pdf.ln()
+
+    pdf.ln(10)
+
+    # Seção 5: Atendimentos Não Realizados
+    if len(not_completed) > 0:
+        pdf.set_font("Arial", 'B', 14)
+        pdf.cell(200, 10, txt="5. Atendimentos Não Realizados", ln=1)
+        pdf.set_font("Arial", size=10)
+
+        pdf.cell(100, 10, txt=f"Total de atendimentos não realizados: {len(not_completed)}", ln=1)
+
+        # Lista os primeiros 10 atendimentos não realizados
+        for idx, row in not_completed.head(10).iterrows():
+            pdf.cell(200, 10,
+                     txt=f"- {row['Nome']} | {row['Dia']} {row['Data'].strftime('%d/%m')} | {row['Cliente']}",
+                     ln=1)
+
+    return pdf
 
 
 def process_spreadsheet(file):
@@ -142,6 +327,66 @@ def process_spreadsheet(file):
     return pd.DataFrame()
 
 
+def calcular_pagamento_individual(row, weekly_data):
+    """Calcula o pagamento individual de cada atendimento"""
+    tech_week_data = weekly_data[
+        (weekly_data['Nome'] == row['Nome']) &
+        (weekly_data['Semana'] == row['Semana'])
+        ]
+
+    if len(tech_week_data) == 0:
+        return pd.Series([0, row['Serviço'] + row['Gorjeta']])
+
+    total_pagamento = tech_week_data['Pagamento Tecnico'].iloc[
+        0] if 'Pagamento Tecnico' in tech_week_data.columns else 0
+    total_servico = tech_week_data['Serviço'].sum()
+
+    if total_servico == 0:
+        return pd.Series([0, row['Serviço'] + row['Gorjeta']])
+
+    # Pagamento proporcional ao serviço realizado neste atendimento
+    try:
+        pagamento = (row['Serviço'] / total_servico) * total_pagamento
+        lucro = row['Serviço'] + row['Gorjeta'] - pagamento
+    except:
+        pagamento = 0
+        lucro = row['Serviço'] + row['Gorjeta']
+
+    return pd.Series([pagamento, lucro])
+
+
+def calcular_pagamento_semanal(row):
+    """Calcula o pagamento semanal baseado na categoria"""
+    categoria = row['Categoria']
+    servico = row['Serviço']
+    gorjeta = row['Gorjeta']
+    dias_trabalhados = row['Dias Trabalhados']
+
+    if categoria == 'Registering':
+        pagamento = 0.00
+        lucro = servico + gorjeta
+    elif categoria == 'Technician':
+        pagamento = servico * 0.20 + gorjeta
+        lucro = servico * 0.80
+    elif categoria == 'Training':
+        pagamento = 80 * dias_trabalhados  # $80 por dia trabalhado
+        lucro = servico + gorjeta - pagamento
+    elif categoria == 'Coordinator':
+        pagamento = servico * 0.25 + gorjeta
+        lucro = servico * 0.75
+    elif categoria == 'Started':
+        # Aplicar cálculo por semana individualmente
+        valor_comissao = servico * 0.20 + gorjeta
+        valor_minimo = 150 * dias_trabalhados
+        pagamento = max(valor_minimo, valor_comissao)
+        lucro = servico + gorjeta - pagamento
+    else:
+        pagamento = 0
+        lucro = servico + gorjeta
+
+    return pd.Series([pagamento, lucro])
+
+
 # Configuração da sidebar
 st.sidebar.markdown("""
 <div style="text-align: center; margin-bottom: 20px;">
@@ -196,8 +441,7 @@ if uploaded_files or url_input:
         selected_categories = st.sidebar.multiselect(
             "Selecione as categorias:",
             options=categories,
-            default=list(categories)
-        )
+            default=list(categories))
 
         # Aplicar filtros
         if selected_weeks:
@@ -220,7 +464,7 @@ if uploaded_files or url_input:
         completed_services = data[data['Realizado']]
         not_completed = data[(data['Realizado'] == False) & (data['Cliente'].notna())]
 
-        # Corrigido: Calcular dias trabalhados corretamente (1 por dia com atendimento, por técnico por semana)
+        # Calcular dias trabalhados corretamente (1 por dia com atendimento, por técnico por semana)
         dias_trabalhados = completed_services.groupby(['Nome', 'Semana', 'Data']).size().reset_index()
         dias_trabalhados = dias_trabalhados.groupby(['Nome', 'Semana']).size().reset_index(name='Dias Trabalhados')
 
@@ -234,73 +478,18 @@ if uploaded_files or url_input:
         # Juntar com os dias trabalhados corretamente calculados
         weekly_totals = pd.merge(weekly_totals, dias_trabalhados, on=['Nome', 'Semana'], how='left')
 
-
-        # Função para calcular pagamento e lucro baseado na categoria (agora considerando semana)
-        def calcular_pagamento_semanal(row):
-            categoria = row['Categoria']
-            servico = row['Serviço']
-            gorjeta = row['Gorjeta']
-            dias_trabalhados = row['Dias Trabalhados']
-
-            if categoria == 'Registering':
-                pagamento = 0.00
-                lucro = servico + gorjeta
-            elif categoria == 'Technician':
-                pagamento = servico * 0.20 + gorjeta
-                lucro = servico * 0.80
-            elif categoria == 'Training':
-                pagamento = 80 * dias_trabalhados  # $80 por dia trabalhado
-                lucro = servico + gorjeta - pagamento
-            elif categoria == 'Coordinator':
-                pagamento = servico * 0.25 + gorjeta
-                lucro = servico * 0.75
-            elif categoria == 'Started':
-                # Aplicar cálculo por semana individualmente
-                valor_comissao = servico * 0.20 + gorjeta
-                valor_minimo = 150 * dias_trabalhados
-                pagamento = max(valor_minimo, valor_comissao)
-                lucro = servico + gorjeta - pagamento
-            else:
-                pagamento = 0
-                lucro = servico + gorjeta
-
-            return pd.Series([pagamento, lucro])
-
-
         # Aplicar cálculo de pagamento e lucro semanal
         weekly_totals[['Pagamento Tecnico', 'Lucro Empresa']] = weekly_totals.apply(
             calcular_pagamento_semanal, axis=1)
 
-
-        # Agora calcular para cada atendimento individual (proporcional)
-        def calcular_pagamento_individual(row, weekly_data):
-            tech_week_data = weekly_data[
-                (weekly_data['Nome'] == row['Nome']) &
-                (weekly_data['Semana'] == row['Semana'])
-                ]
-
-            if len(tech_week_data) == 0:
-                return pd.Series([0, row['Serviço'] + row['Gorjeta']])
-
-            total_pagamento = tech_week_data['Pagamento Tecnico'].iloc[0]
-            total_servico = tech_week_data['Serviço'].iloc[0]
-
-            if total_servico == 0:
-                return pd.Series([0, row['Serviço'] + row['Gorjeta']])
-
-            # Pagamento proporcional ao serviço realizado neste atendimento
-            pagamento = (row['Serviço'] / total_servico) * total_pagamento
-            lucro = row['Serviço'] + row['Gorjeta'] - pagamento
-
-            return pd.Series([pagamento, lucro])
-
-
         # Aplicar cálculo proporcional para cada atendimento
-        completed_services[['Pagamento Tecnico', 'Lucro Empresa']] = completed_services.apply(
-            lambda x: calcular_pagamento_individual(x, weekly_totals), axis=1)
+        if 'Pagamento Tecnico' not in completed_services.columns:
+            completed_services[['Pagamento Tecnico', 'Lucro Empresa']] = completed_services.apply(
+                lambda x: calcular_pagamento_individual(x, weekly_totals), axis=1)
 
-        total_lucro = completed_services['Lucro Empresa'].sum()
-        total_pagamentos = completed_services['Pagamento Tecnico'].sum()
+        total_lucro = completed_services['Lucro Empresa'].sum() if 'Lucro Empresa' in completed_services.columns else 0
+        total_pagamentos = completed_services[
+            'Pagamento Tecnico'].sum() if 'Pagamento Tecnico' in completed_services.columns else 0
 
         col1, col2, col3, col4, col5 = st.columns(5)
         col1.metric("Realizados", len(completed_services))
@@ -309,8 +498,8 @@ if uploaded_files or url_input:
         col4.metric("Total em Gorjetas", format_currency(completed_services['Gorjeta'].sum()))
         col5.metric("Lucro da Empresa", format_currency(total_lucro))
 
-        # LAYOUT COM COLUNAS - AGORA COM CÁLCULOS À ESQUERDA E ANÁLISE À DIREITA
-        col_calculos, col_analise = st.columns([1, 2])  # Proporção 1:2
+        # LAYOUT COM COLUNAS
+        col_calculos, col_analise = st.columns([1, 2])
 
         with col_calculos:
             st.header("Cálculos Semanais")
@@ -339,7 +528,7 @@ if uploaded_files or url_input:
         with col_analise:
             st.header("Análise por Técnico")
 
-            # Agrupar por técnico e categoria, mantendo os cálculos semanais separados
+            # Agrupar por técnico e categoria
             tech_summary = weekly_totals.groupby(['Nome', 'Categoria']).agg({
                 'Serviço': 'sum',
                 'Gorjeta': 'sum',
@@ -381,7 +570,7 @@ if uploaded_files or url_input:
         st.plotly_chart(fig_evolucao, use_container_width=True)
 
         # Técnico da Semana
-        if len(selected_weeks) == 1:  # Mostrar apenas se uma semana estiver selecionada
+        if len(selected_weeks) == 1:
             semana_atual = selected_weeks[0]
             tech_da_semana = \
                 weekly_totals[weekly_totals['Semana'] == semana_atual].sort_values('Serviço',
@@ -555,9 +744,29 @@ if uploaded_files or url_input:
         st.plotly_chart(fig7, use_container_width=True)
 
         st.header("📤 Exportar Dados")
-        if st.button("Exportar CSV"):
-            csv = data.to_csv(index=False).encode('utf-8')
-            st.download_button("📁 Baixar CSV", data=csv, file_name="servicos_tecnicos.csv", mime="text/csv")
+        col1, col2 = st.columns(2)
+
+        with col1:
+            if st.button("Exportar CSV"):
+                csv = data.to_csv(index=False).encode('utf-8')
+                st.download_button("📁 Baixar CSV", data=csv, file_name="servicos_tecnicos.csv", mime="text/csv")
+
+        with col2:
+            if st.button("Exportar PDF"):
+                # Garante que as colunas necessárias existam antes de criar o PDF
+                if 'Pagamento Tecnico' not in data.columns:
+                    data['Pagamento Tecnico'] = 0
+                if 'Lucro Empresa' not in data.columns:
+                    data['Lucro Empresa'] = data['Serviço'] + data['Gorjeta'] - data['Pagamento Tecnico']
+
+                pdf = create_pdf(data)
+                pdf_bytes = pdf.output(dest='S').encode('latin-1')
+                st.download_button(
+                    label="📄 Baixar PDF",
+                    data=pdf_bytes,
+                    file_name="relatorio_servicos_tecnicos.pdf",
+                    mime="application/pdf"
+                )
 
 st.markdown("""
     <style>
