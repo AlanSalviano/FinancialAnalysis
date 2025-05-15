@@ -313,7 +313,7 @@ if uploaded_files or url_input:
         col_calculos, col_analise = st.columns([1, 2])  # Proporção 1:2
 
         with col_calculos:
-            st.header("💰 Cálculos Semanais")
+            st.header("Cálculos Semanais")
 
             # Formatar valores monetários para exibição
             weekly_totals_display = weekly_totals.copy()
@@ -337,7 +337,7 @@ if uploaded_files or url_input:
             st.dataframe(weekly_totals_display)
 
         with col_analise:
-            st.header("👨‍🔧 Análise por Técnico")
+            st.header("Análise por Técnico")
 
             # Agrupar por técnico e categoria, mantendo os cálculos semanais separados
             tech_summary = weekly_totals.groupby(['Nome', 'Categoria']).agg({
