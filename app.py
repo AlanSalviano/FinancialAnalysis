@@ -345,7 +345,7 @@ if uploaded_files or url_input:
                 'Gorjeta': 'sum',
                 'Pagamento Tecnico': 'sum',
                 'Lucro Empresa': 'sum',
-                'Dia': 'sum',
+                'Atendimentos': 'sum',
                 'Dias Trabalhados': 'sum'
             }).reset_index()
 
