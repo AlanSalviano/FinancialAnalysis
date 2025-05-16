@@ -238,12 +238,12 @@ def create_tech_payment_receipt(tech_data, tech_name, week):
     date_range = f"{min_date} to {max_date}"
 
     # Restante do conteúdo do recibo
-    pdf.set_font("Arial", 'B', 16)
+    pdf.set_font("Arial", 'B', 18)
     pdf.cell(page_width, 10, txt="TECHNICIAN PAYMENT RECEIPT", ln=1, align='C')
-    pdf.ln(10)
+    pdf.ln(9)
 
     # Informações do técnico e semana
-    pdf.set_font("Arial", size=12)
+    pdf.set_font("Arial", size=10)
     pdf.cell(page_width, 8, txt=f"Technician: {tech_name}", ln=1)
     pdf.cell(page_width, 8, txt=f"Reference: {date_range}", ln=1)  # Alterado para mostrar intervalo de datas
     pdf.cell(page_width, 8, txt=f"Date of issue: {datetime.now().strftime('%m/%d/%Y')}", ln=1)
@@ -265,7 +265,7 @@ def create_tech_payment_receipt(tech_data, tech_name, week):
     # Tabela de resumo
     col_widths = [page_width / 2, page_width / 2]
 
-    pdf.cell(col_widths[0], 10, txt="Total Schedules", border='B', ln=0)
+    pdf.cell(col_widths[0], 10, txt="Total Schedules:", border='B', ln=0)
     pdf.cell(col_widths[1], 10, txt=str(len(tech_data)), border='B', ln=1, align='R')
 
     pdf.cell(col_widths[0], 10, txt="Total in Services:", border='B', ln=0)
@@ -315,7 +315,7 @@ def create_tech_payment_receipt(tech_data, tech_name, week):
     col_widths = [46, 46, 47, 46]  # Ajustado para caber no timbrado
     headers = ["Day", "Showed", "Services", "Tips"]
 
-    pdf.set_font("Arial", 'B', 8)
+    pdf.set_font("Arial", 'B', 7)
     for i, header in enumerate(headers):
         pdf.cell(col_widths[i], 6, txt=header, border=1, align='C')
     pdf.ln()
@@ -351,7 +351,7 @@ def create_tech_payment_receipt(tech_data, tech_name, week):
         pdf.ln()
 
         # Linhas da tabela detalhada
-        pdf.set_font("Arial", size=6)
+        pdf.set_font("Arial", size=7)
         for _, row in tech_data_sorted.iterrows():
             if pdf.get_y() > page_height - 20:  # Verifica fim da página
                 pdf.add_page()
