@@ -27,23 +27,30 @@ def format_currency(value):
 
 def create_pdf(data):
     """Cria um PDF com os dados da página principal"""
-    pdf = FPDF()
+    pdf = FPDF(orientation='P', unit='mm', format='A4')
     pdf.add_page()
-    pdf.set_font("Arial", size=12)
+    pdf.set_font("Arial", size=10)
+
+    # Configurações de margem
+    left_margin = 10
+    right_margin = 10
+    pdf.set_left_margin(left_margin)
+    pdf.set_right_margin(right_margin)
+    page_width = pdf.w - left_margin - right_margin
 
     # Adiciona título
     pdf.set_font("Arial", 'B', 16)
-    pdf.cell(200, 10, txt="BNS - PORTAL DE ANÁLISES DE DADOS FINANCEIROS", ln=1, align='C')
-    pdf.ln(10)
+    pdf.cell(page_width, 10, txt="BNS - PORTAL DE ANÁLISES DE DADOS FINANCEIROS", ln=1, align='C')
+    pdf.ln(5)
 
     # Adiciona data de geração
     pdf.set_font("Arial", size=10)
-    pdf.cell(200, 10, txt=f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", ln=1, align='R')
+    pdf.cell(page_width, 10, txt=f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", ln=1, align='R')
     pdf.ln(10)
 
     # Seção 1: Métricas Gerais
     pdf.set_font("Arial", 'B', 14)
-    pdf.cell(200, 10, txt="1. Métricas Gerais", ln=1)
+    pdf.cell(page_width, 10, txt="1. Métricas Gerais", ln=1)
     pdf.set_font("Arial", size=10)
 
     completed_services = data[data['Realizado']]
@@ -58,14 +65,14 @@ def create_pdf(data):
     ]
 
     for metric, value in metrics:
-        pdf.cell(100, 10, txt=f"{metric}:", ln=0)
-        pdf.cell(100, 10, txt=str(value), ln=1)
+        pdf.cell(page_width / 2, 10, txt=f"{metric}:", ln=0)
+        pdf.cell(page_width / 2, 10, txt=str(value), ln=1)
 
     pdf.ln(10)
 
     # Seção 2: Resumo por Técnico
     pdf.set_font("Arial", 'B', 14)
-    pdf.cell(200, 10, txt="2. Resumo por Técnico", ln=1)
+    pdf.cell(page_width, 10, txt="2. Resumo por Técnico", ln=1)
 
     # Prepara dados para a tabela
     tech_summary = completed_services.groupby(['Nome', 'Categoria']).agg({
@@ -80,8 +87,8 @@ def create_pdf(data):
                             'Total Pagamento', 'Lucro Empresa', 'Atendimentos']
 
     # Adiciona tabela de técnicos
-    pdf.set_font("Arial", size=10)
-    col_widths = [40, 30, 30, 30, 30, 30]
+    pdf.set_font("Arial", size=8)  # Fonte menor para caber mais colunas
+    col_widths = [30, 25, 25, 25, 25, 25]  # Larguras ajustadas para caber na página
 
     # Cabeçalho da tabela
     headers = ["Técnico", "Categoria", "Serviços", "Gorjetas", "Pagamento", "Lucro"]
@@ -91,8 +98,10 @@ def create_pdf(data):
 
     # Linhas da tabela
     for _, row in tech_summary.iterrows():
-        pdf.cell(col_widths[0], 10, txt=str(row['Técnico']), border=1)
-        pdf.cell(col_widths[1], 10, txt=str(row['Categoria']), border=1)
+        # Quebra de linha se o nome for muito longo
+        tech_name = str(row['Técnico'])[:15] + '...' if len(str(row['Técnico'])) > 15 else str(row['Técnico'])
+        pdf.cell(col_widths[0], 10, txt=tech_name, border=1)
+        pdf.cell(col_widths[1], 10, txt=str(row['Categoria'])[:10], border=1)  # Limita categoria
         pdf.cell(col_widths[2], 10, txt=format_currency(row['Total Serviços']), border=1, align='R')
         pdf.cell(col_widths[3], 10, txt=format_currency(row['Total Gorjetas']), border=1, align='R')
         pdf.cell(col_widths[4], 10, txt=format_currency(row['Total Pagamento']), border=1, align='R')
@@ -103,7 +112,7 @@ def create_pdf(data):
 
     # Seção 3: Métodos de Pagamento
     pdf.set_font("Arial", 'B', 14)
-    pdf.cell(200, 10, txt="3. Métodos de Pagamento", ln=1)
+    pdf.cell(page_width, 10, txt="3. Métodos de Pagamento", ln=1)
     pdf.set_font("Arial", size=10)
 
     valid_payments = completed_services[completed_services['Pagamento'].isin(FORMAS_PAGAMENTO_VALIDAS)]
@@ -120,12 +129,12 @@ def create_pdf(data):
 
         # Tabela de métodos de pagamento
         pdf.set_font("Arial", 'B', 12)
-        pdf.cell(200, 10, txt="Resumo por Método de Pagamento:", ln=1)
-        pdf.set_font("Arial", size=10)
+        pdf.cell(page_width, 10, txt="Resumo por Método de Pagamento:", ln=1)
+        pdf.set_font("Arial", size=8)  # Fonte menor para tabela
 
         # Cabeçalho
         headers = ["Método", "Usos", "Serviços", "Gorjetas", "Total", "Lucro"]
-        col_widths_payments = [40, 30, 30, 30, 30, 30]
+        col_widths_payments = [30, 20, 25, 25, 25, 25]  # Larguras ajustadas
 
         for i, header in enumerate(headers):
             pdf.cell(col_widths_payments[i], 10, txt=header, border=1, align='C')
@@ -133,7 +142,7 @@ def create_pdf(data):
 
         # Linhas
         for _, row in payment_methods.iterrows():
-            pdf.cell(col_widths_payments[0], 10, txt=str(row['Método']), border=1)
+            pdf.cell(col_widths_payments[0], 10, txt=str(row['Método'])[:12], border=1)  # Limita método
             pdf.cell(col_widths_payments[1], 10, txt=str(row['Qtd Usos']), border=1, align='C')
             pdf.cell(col_widths_payments[2], 10, txt=format_currency(row['Total Serviços']), border=1, align='R')
             pdf.cell(col_widths_payments[3], 10, txt=format_currency(row['Total Gorjetas']), border=1, align='R')
@@ -144,20 +153,20 @@ def create_pdf(data):
         # Adiciona porcentagem de uso
         pdf.ln(5)
         pdf.set_font("Arial", 'B', 12)
-        pdf.cell(200, 10, txt="Distribuição por Método de Pagamento:", ln=1)
+        pdf.cell(page_width, 10, txt="Distribuição por Método de Pagamento:", ln=1)
         pdf.set_font("Arial", size=10)
 
         total_usos = payment_methods['Qtd Usos'].sum()
         for _, row in payment_methods.iterrows():
             percent = (row['Qtd Usos'] / total_usos * 100)
-            pdf.cell(100, 10, txt=f"{row['Método']}:", ln=0)
-            pdf.cell(100, 10, txt=f"{percent:.1f}% ({row['Qtd Usos']} usos)", ln=1)
+            pdf.cell(page_width / 2, 10, txt=f"{row['Método']}:", ln=0)
+            pdf.cell(page_width / 2, 10, txt=f"{percent:.1f}% ({row['Qtd Usos']} usos)", ln=1)
 
     pdf.ln(10)
 
     # Seção 4: Atendimentos por Dia da Semana
     pdf.set_font("Arial", 'B', 14)
-    pdf.cell(200, 10, txt="4. Atendimentos por Dia da Semana", ln=1)
+    pdf.cell(page_width, 10, txt="4. Atendimentos por Dia da Semana", ln=1)
     pdf.set_font("Arial", size=10)
 
     day_summary = completed_services.groupby('Dia').agg({
@@ -174,9 +183,10 @@ def create_pdf(data):
     day_summary = day_summary.sort_values('Dia')
 
     # Tabela de dias
-    col_widths_days = [40, 30, 40, 40, 40]
-    headers = ["Dia", "Atendimentos", "Serviços", "Gorjetas", "Lucro"]
+    col_widths_days = [30, 25, 30, 30, 30]  # Larguras ajustadas
+    headers = ["Dia", "Atend.", "Serviços", "Gorjetas", "Lucro"]
 
+    pdf.set_font("Arial", size=8)
     for i, header in enumerate(headers):
         pdf.cell(col_widths_days[i], 10, txt=header, border=1, align='C')
     pdf.ln()
@@ -194,16 +204,204 @@ def create_pdf(data):
     # Seção 5: Atendimentos Não Realizados
     if len(not_completed) > 0:
         pdf.set_font("Arial", 'B', 14)
-        pdf.cell(200, 10, txt="5. Atendimentos Não Realizados", ln=1)
+        pdf.cell(page_width, 10, txt="5. Atendimentos Não Realizados", ln=1)
         pdf.set_font("Arial", size=10)
 
-        pdf.cell(100, 10, txt=f"Total de atendimentos não realizados: {len(not_completed)}", ln=1)
+        pdf.cell(page_width, 10, txt=f"Total de atendimentos não realizados: {len(not_completed)}", ln=1)
 
         # Lista os primeiros 10 atendimentos não realizados
+        pdf.set_font("Arial", size=8)
         for idx, row in not_completed.head(10).iterrows():
-            pdf.cell(200, 10,
+            pdf.cell(page_width, 10,
                      txt=f"- {row['Nome']} | {row['Dia']} {row['Data'].strftime('%d/%m')} | {row['Cliente']}",
                      ln=1)
+
+    return pdf
+
+
+def create_tech_payment_receipt(tech_data, tech_name, week):
+    """Cria um PDF com o recibo de pagamento detalhado para o técnico com papel timbrado"""
+    pdf = FPDF(orientation='P', unit='mm', format='A4')
+    pdf.add_page()
+
+    # Configurações de margem
+    left_margin = 15
+    right_margin = 15
+    pdf.set_left_margin(left_margin)
+    pdf.set_right_margin(right_margin)
+    page_width = pdf.w - left_margin - right_margin
+    page_height = pdf.h
+
+    # Calcular intervalo de datas
+    min_date = tech_data['Data'].min().strftime('%m/%d/%y')
+    max_date = tech_data['Data'].max().strftime('%m/%d/%y')
+    date_range = f"{min_date} to {max_date}"
+
+    # Restante do conteúdo do recibo
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(page_width, 10, txt="TECHNICIAN PAYMENT RECEIPT", ln=1, align='C')
+    pdf.ln(10)
+
+    # Informações do técnico e semana
+    pdf.set_font("Arial", size=12)
+    pdf.cell(page_width, 8, txt=f"Technician: {tech_name}", ln=1)
+    pdf.cell(page_width, 8, txt=f"Reference: {date_range}", ln=1)  # Alterado para mostrar intervalo de datas
+    pdf.cell(page_width, 8, txt=f"Date of issue: {datetime.now().strftime('%m/%d/%Y')}", ln=1)
+    pdf.ln(10)
+
+    # Resumo de atendimentos
+    pdf.set_font("Arial", 'B', 14)
+    pdf.cell(page_width, 10, txt="SUMMARY OF SERVICES", ln=1)
+    pdf.set_font("Arial", size=10)
+
+    total_services = tech_data['Serviço'].sum()
+    total_tips = tech_data['Gorjeta'].sum()
+    total_payment = tech_data['Pagamento Tecnico'].sum()
+
+    # Formata os valores
+    def format_value(value):
+        return f"${value:,.2f}" if isinstance(value, (int, float)) else str(value)
+
+    # Tabela de resumo
+    col_widths = [page_width / 2, page_width / 2]
+
+    pdf.cell(col_widths[0], 10, txt="Total Schedules", border='B', ln=0)
+    pdf.cell(col_widths[1], 10, txt=str(len(tech_data)), border='B', ln=1, align='R')
+
+    pdf.cell(col_widths[0], 10, txt="Total in Services:", border='B', ln=0)
+    pdf.cell(col_widths[1], 10, txt=format_value(total_services), border='B', ln=1, align='R')
+
+    pdf.cell(col_widths[0], 10, txt="Total in Tips:", border='B', ln=0)
+    pdf.cell(col_widths[1], 10, txt=format_value(total_tips), border='B', ln=1, align='R')
+
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(col_widths[0], 10, txt="Total Payment", border='B', ln=0)
+    pdf.cell(col_widths[1], 10, txt=format_value(total_payment), border='B', ln=1, align='R')
+    pdf.set_font("Arial", size=10)
+
+    pdf.ln(15)
+
+    # Detalhes por dia
+    pdf.set_font("Arial", 'B', 14)
+    pdf.cell(page_width, 10, txt="DETAILS BY DAY", ln=1)
+    pdf.set_font("Arial", size=8)
+
+    # Agrupar por dia
+    day_details = tech_data.groupby('Dia').agg({
+        'Serviço': 'sum',
+        'Gorjeta': 'sum',
+        'Cliente': 'count',
+        'Pagamento': lambda x: ', '.join([str(p) for p in x.unique() if pd.notna(p)])
+    }).reset_index()
+
+    # Mapear os dias para inglês
+    day_mapping = {
+        'Domingo': 'Sun',
+        'Segunda': 'Mon',
+        'Terça': 'Tue',
+        'Quarta': 'Wed',
+        'Quinta': 'Thu',
+        'Sexta': 'Fri',
+        'Sábado': 'Sat'
+    }
+    day_details['Dia'] = day_details['Dia'].map(day_mapping)
+
+    # Ordenar os dias corretamente
+    day_order = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+    day_details['Dia'] = pd.Categorical(day_details['Dia'], categories=day_order, ordered=True)
+    day_details = day_details.sort_values('Dia')
+
+    # Cabeçalho da tabela
+    col_widths = [25, 25, 25, 25, 85]  # Ajustado para caber no timbrado
+    headers = ["Day", "Showed", "Services", "Tips", "Payments"]
+
+    pdf.set_font("Arial", 'B', 8)
+    for i, header in enumerate(headers):
+        pdf.cell(col_widths[i], 6, txt=header, border=1, align='C')
+    pdf.ln()
+
+    # Linhas da tabela
+    pdf.set_font("Arial", size=7)
+    for _, row in day_details.iterrows():
+        pdf.cell(col_widths[0], 6, txt=str(row['Dia']), border=1)  # Dia em inglês
+        pdf.cell(col_widths[1], 6, txt=str(row['Cliente']), border=1, align='C')
+        pdf.cell(col_widths[2], 6, txt=format_value(row['Serviço']), border=1, align='R')
+        pdf.cell(col_widths[3], 6, txt=format_value(row['Gorjeta']), border=1, align='R')
+
+        # Pagamentos (com quebra se necessário)
+        payments = row['Pagamento'] if row['Pagamento'] else "-"
+        if len(payments) > 30:
+            pdf.cell(col_widths[4], 6, txt=payments[:30], border='LR')
+            pdf.ln()
+            pdf.cell(sum(col_widths[:4]), 5, txt="", border='')
+            pdf.cell(col_widths[4], 6, txt=payments[30:60] if len(payments) > 60 else payments[60:], border='LRB')
+        else:
+            pdf.cell(col_widths[4], 6, txt=payments, border=1)
+
+        pdf.ln()
+
+    pdf.ln(10)
+
+    # Detalhes dos atendimentos (se couber na página)
+    if pdf.get_y() < page_height - 50:  # Verifica se há espaço na página
+        pdf.set_font("Arial", 'B', 14)
+        pdf.cell(page_width, 10, txt="SERVICE DETAILS", ln=1)
+        pdf.set_font("Arial", size=7)
+
+        # Ordenar por data e dia
+        tech_data_sorted = tech_data.sort_values(['Data', 'Dia'])
+
+        # Cabeçalho da tabela detalhada
+        col_widths_detailed = [25, 25, 60, 25, 25, 25]  # Ajustado para timbrado
+        headers_detailed = ["Date", "Day", "Customer", "Service", "Tips", "Payment"]
+
+        pdf.set_font("Arial", 'B', 7)
+        for i, header in enumerate(headers_detailed):
+            pdf.cell(col_widths_detailed[i], 6, txt=header, border=1, align='C')
+        pdf.ln()
+
+        # Linhas da tabela detalhada
+        pdf.set_font("Arial", size=6)
+        for _, row in tech_data_sorted.iterrows():
+            if pdf.get_y() > page_height - 20:  # Verifica fim da página
+                pdf.add_page()
+                # Adiciona timbrado na nova página
+                try:
+                    pdf.image(timbrado_url, x=0, y=0, w=pdf.w, h=pdf.h, type='PNG')
+                    pdf.set_fill_color(255, 255, 255, 80)
+                    pdf.rect(0, 0, pdf.w, pdf.h, 'F')
+                except:
+                    pass
+                pdf.set_y(30)
+
+                # Recria cabeçalho da tabela
+                pdf.set_font("Arial", 'B', 7)
+                for i, header in enumerate(headers_detailed):
+                    pdf.cell(col_widths_detailed[i], 8, txt=header, border=1, align='C')
+                pdf.ln()
+                pdf.set_font("Arial", size=6)
+
+            # Data
+            pdf.cell(col_widths_detailed[0], 6, txt=row['Data'].strftime('%d/%m'), border=1)
+            # Dia (convertido para inglês)
+            day_english = day_mapping.get(row['Dia'], row['Dia'])
+            pdf.cell(col_widths_detailed[1], 6, txt=day_english, border=1)
+            # Cliente
+            client_name = str(row['Cliente'])[:20] + '...' if len(str(row['Cliente'])) > 20 else str(row['Cliente'])
+            pdf.cell(col_widths_detailed[2], 6, txt=client_name, border=1)
+            # Serviço
+            pdf.cell(col_widths_detailed[3], 6, txt=format_value(row['Serviço']), border=1, align='R')
+            # Gorjeta
+            pdf.cell(col_widths_detailed[4], 6, txt=format_value(row['Gorjeta']), border=1, align='R')
+            # Pagamento
+            payment = str(row['Pagamento']) if pd.notna(row['Pagamento']) else "-"
+            pdf.cell(col_widths_detailed[5], 6, txt=payment[:12], border=1)
+            pdf.ln()
+
+    # Informação da empresa no rodapé
+    pdf.set_font("Arial", size=8)
+    pdf.cell(page_width, 5, txt="BRIGHT N SHINE PET DENTAL LLC", ln=1, align='C')
+    pdf.cell(page_width, 5, txt="(407)259-7897", ln=1, align='C')
 
     return pdf
 
@@ -417,11 +615,15 @@ if uploaded_files or url_input:
         data = data[data['Nome'].notna() & (data['Nome'].astype(str).str.strip() != '')]
         data = data[~data['Cliente'].astype(str).str.strip().str.upper().isin([c.upper() for c in INVALID_CLIENTS])]
 
+        # Definir opções de filtro
+        weeks = data['Semana'].unique()
+        technicians = data['Nome'].unique()
+        categories = data['Categoria'].unique()
+
         # Filtros na sidebar
         st.sidebar.header("Filtrar por:")
 
         # Filtrar por abas (Semana)
-        weeks = data['Semana'].unique()
         selected_weeks = st.sidebar.multiselect(
             "Selecione as abas (semanas):",
             options=weeks,
@@ -429,7 +631,6 @@ if uploaded_files or url_input:
         )
 
         # Filtrar por técnico
-        technicians = data['Nome'].unique()
         selected_techs = st.sidebar.multiselect(
             "Selecione os técnicos:",
             options=technicians,
@@ -437,7 +638,6 @@ if uploaded_files or url_input:
         )
 
         # Filtrar por categoria
-        categories = data['Categoria'].unique()
         selected_categories = st.sidebar.multiselect(
             "Selecione as categorias:",
             options=categories,
@@ -744,7 +944,7 @@ if uploaded_files or url_input:
         st.plotly_chart(fig7, use_container_width=True)
 
         st.header("📤 Exportar Dados")
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
 
         with col1:
             if st.button("Exportar CSV"):
@@ -752,7 +952,7 @@ if uploaded_files or url_input:
                 st.download_button("📁 Baixar CSV", data=csv, file_name="servicos_tecnicos.csv", mime="text/csv")
 
         with col2:
-            if st.button("Exportar PDF"):
+            if st.button("Exportar Relatório PDF"):
                 # Garante que as colunas necessárias existam antes de criar o PDF
                 if 'Pagamento Tecnico' not in data.columns:
                     data['Pagamento Tecnico'] = 0
@@ -762,11 +962,38 @@ if uploaded_files or url_input:
                 pdf = create_pdf(data)
                 pdf_bytes = pdf.output(dest='S').encode('latin-1')
                 st.download_button(
-                    label="📄 Baixar PDF",
+                    label="📄 Baixar Relatório Completo",
                     data=pdf_bytes,
                     file_name="relatorio_servicos_tecnicos.pdf",
                     mime="application/pdf"
                 )
+
+        with col3:
+            # Verifica se apenas um técnico e uma semana estão selecionados
+            if len(selected_techs) == 1 and len(selected_weeks) == 1:
+                tech_name = selected_techs[0]
+                week = selected_weeks[0]
+
+                # Filtra os dados para o técnico e semana selecionados
+                tech_data = completed_services[
+                    (completed_services['Nome'] == tech_name) &
+                    (completed_services['Semana'] == week)
+                    ]
+
+                if not tech_data.empty:
+                    if st.button("Exportar Recibo Técnico"):
+                        pdf = create_tech_payment_receipt(tech_data, tech_name, week)
+                        pdf_bytes = pdf.output(dest='S').encode('latin-1')
+                        st.download_button(
+                            label="🧾 Baixar Recibo de Pagamento",
+                            data=pdf_bytes,
+                            file_name=f"recibo_pagamento_{tech_name}_{week}.pdf",
+                            mime="application/pdf"
+                        )
+                else:
+                    st.warning("Nenhum dado encontrado para o técnico selecionado nesta semana.")
+            else:
+                st.warning("Selecione apenas um técnico e uma semana para gerar o recibo.")
 
 st.markdown("""
     <style>
