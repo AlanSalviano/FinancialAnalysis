@@ -312,8 +312,8 @@ def create_tech_payment_receipt(tech_data, tech_name, week):
     day_details = day_details.sort_values('Dia')
 
     # Cabeçalho da tabela
-    col_widths = [25, 25, 25, 25, 85]  # Ajustado para caber no timbrado
-    headers = ["Day", "Showed", "Services", "Tips", "Payments"]
+    col_widths = [46, 46, 47, 46]  # Ajustado para caber no timbrado
+    headers = ["Day", "Showed", "Services", "Tips"]
 
     pdf.set_font("Arial", 'B', 8)
     for i, header in enumerate(headers):
@@ -327,16 +327,6 @@ def create_tech_payment_receipt(tech_data, tech_name, week):
         pdf.cell(col_widths[1], 6, txt=str(row['Cliente']), border=1, align='C')
         pdf.cell(col_widths[2], 6, txt=format_value(row['Serviço']), border=1, align='R')
         pdf.cell(col_widths[3], 6, txt=format_value(row['Gorjeta']), border=1, align='R')
-
-        # Pagamentos (com quebra se necessário)
-        payments = row['Pagamento'] if row['Pagamento'] else "-"
-        if len(payments) > 30:
-            pdf.cell(col_widths[4], 6, txt=payments[:30], border='LR')
-            pdf.ln()
-            pdf.cell(sum(col_widths[:4]), 5, txt="", border='')
-            pdf.cell(col_widths[4], 6, txt=payments[30:60] if len(payments) > 60 else payments[60:], border='LRB')
-        else:
-            pdf.cell(col_widths[4], 6, txt=payments, border=1)
 
         pdf.ln()
 
